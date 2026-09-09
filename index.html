@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wire — direct file transfer</title>
+<style>
+  :root {
+    --bg: #FAFAF8;
+    --surface: #FFFFFF;
+    --ink: #1A1D23;
+    --ink-soft: #5B6270;
+    --line: #E3E1DC;
+    --accent: #2F5D50;
+    --accent-hover: #24473D;
+    --accent-soft: #E6EEEC;
+    --warn: #A24B2F;
+    --radius: 3px;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  @font-face {
+    font-family: 'IBM Plex Sans';
+    src: local('IBM Plex Sans');
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 80px;
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 620px;
+  }
+
+  header.hero {
+    margin-bottom: 40px;
+  }
+
+  header.hero h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  header.hero h1 .mark {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  header.hero p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 15px;
+    line-height: 1.5;
+    max-width: 46ch;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+
+  .field-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 14px;
+    font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .server-row {
+    margin-bottom: 24px;
+  }
+
+  .server-row .hint {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+
+  .tabs button {
+    flex: 1;
+    padding: 9px 0;
+    border: none;
+    background: transparent;
+    border-radius: 2px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+
+  .tabs button.active {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  .action-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .action-row input {
+    flex: 1;
+    text-transform: uppercase;
+  }
+
+  button.btn {
+    padding: 11px 20px;
+    border-radius: var(--radius);
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  button.btn:hover { background: var(--accent-hover); }
+  button.btn:disabled { background: var(--line); color: var(--ink-soft); cursor: not-allowed; }
+
+  button.btn.ghost {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
+  button.btn.ghost:hover { background: var(--accent-soft); }
+
+  .room-code {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 40px;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+    color: var(--ink);
+    margin: 4px 0 14px;
+  }
+
+  .status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line);
+    flex-shrink: 0;
+  }
+  .dot.pending { background: #C99A3B; }
+  .dot.live { background: var(--accent); }
+  .dot.error { background: var(--warn); }
+
+  .share-row {
+    margin-top: 18px;
+    display: flex;
+    gap: 8px;
+  }
+  .share-row input {
+    font-size: 12.5px;
+  }
+
+  .dropzone {
+    border: 1.5px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 14px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone.drag {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+  .dropzone strong { color: var(--accent); font-weight: 600; }
+
+  .file-list {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .file-row {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+
+  .file-row .top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .file-row .name {
+    font-size: 13.5px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-row .meta {
+    font-size: 12px;
+    color: var(--ink-soft);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    flex-shrink: 0;
+  }
+
+  .bar-track {
+    height: 4px;
+    background: var(--line);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width .12s linear;
+  }
+  .file-row.done .bar-fill { background: var(--accent); }
+
+  .file-row a.dl {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 12.5px;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .file-row a.dl:hover { text-decoration: underline; }
+
+  .section-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    margin: 26px 0 10px;
+  }
+
+  .hidden { display: none !important; }
+
+  footer {
+    margin-top: 30px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    text-align: center;
+    line-height: 1.6;
+  }
+  footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1><span class="mark"></span>Wire</h1>
+    <p>Send files straight from your device to theirs. Nothing is uploaded to a server — a small local relay just introduces the two of you, then gets out of the way.</p>
+  </header>
+
+  <!-- Setup: signaling server address -->
+  <section class="panel" id="setup-panel">
+    <div class="server-row">
+      <label class="field-label" for="server-url">Signaling server</label>
+      <input type="text" id="server-url" placeholder="ws://localhost:8080" />
+      <div class="hint">
+        This is the small local server's address, not where your files go — files travel directly between browsers.
+        Run it with <code>node server.js</code>. If this page is loaded over <strong>https</strong> (e.g. GitHub Pages),
+        the server address must start with <strong>wss://</strong> (use a tunnel like ngrok) or your browser will block it.
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button id="tab-create" class="active">Create room</button>
+      <button id="tab-join">Join room</button>
+    </div>
+
+    <div id="pane-create">
+      <button class="btn" id="btn-create" style="width:100%;">Start a room</button>
+    </div>
+
+    <div id="pane-join" class="hidden">
+      <div class="action-row">
+        <input type="text" id="join-code" maxlength="6" placeholder="ROOM CODE" />
+        <button class="btn" id="btn-join">Join</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Room status -->
+  <section class="panel hidden" id="room-panel">
+    <label class="field-label">Room code</label>
+    <div class="room-code" id="room-code-display">——————</div>
+    <div class="status-line"><span class="dot pending" id="status-dot"></span><span id="status-text">Connecting…</span></div>
+
+    <div class="share-row hidden" id="share-row">
+      <input type="text" id="share-link" readonly />
+      <button class="btn ghost" id="btn-copy">Copy link</button>
+    </div>
+  </section>
+
+  <!-- Transfer UI -->
+  <section class="panel hidden" id="transfer-panel">
+    <div class="dropzone" id="dropzone">
+      Drag files here, or <strong>click to choose</strong>
+    </div>
+    <input type="file" id="file-input" multiple class="hidden" />
+
+    <div id="sending-block" class="hidden">
+      <div class="section-title">Sending</div>
+      <div class="file-list" id="sending-list"></div>
+    </div>
+
+    <div id="receiving-block" class="hidden">
+      <div class="section-title">Receiving</div>
+      <div class="file-list" id="receiving-list"></div>
+    </div>
+  </section>
+
+  <footer>
+    Files never touch the signaling server — they're sent directly over an encrypted WebRTC connection between your browser and theirs.
+  </footer>
+</div>
+
+<script>
+(function () {
+  const CHUNK_SIZE = 16 * 1024;
+  const BUFFER_THRESHOLD = 4 * 1024 * 1024;
+  const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ];
+
+  // ---- elements ----
+  const $ = (id) => document.getElementById(id);
+  const serverInput = $('server-url');
+  const tabCreate = $('tab-create'), tabJoin = $('tab-join');
+  const paneCreate = $('pane-create'), paneJoin = $('pane-join');
+  const btnCreate = $('btn-create'), btnJoin = $('btn-join'), joinCodeInput = $('join-code');
+  const roomPanel = $('room-panel'), roomCodeDisplay = $('room-code-display');
+  const statusDot = $('status-dot'), statusText = $('status-text');
+  const shareRow = $('share-row'), shareLink = $('share-link'), btnCopy = $('btn-copy');
+  const transferPanel = $('transfer-panel');
+  const dropzone = $('dropzone'), fileInput = $('file-input');
+  const sendingBlock = $('sending-block'), sendingList = $('sending-list');
+  const receivingBlock = $('receiving-block'), receivingList = $('receiving-list');
+
+  let ws = null;
+  let pc = null;
+  let dataChannel = null;
+  let isInitiator = false;
+  let roomCode = null;
+
+  // ---- persisted server url ----
+  serverInput.value = localStorage.getItem('wire-server-url') || guessDefaultServer();
+  serverInput.addEventListener('change', () => {
+    localStorage.setItem('wire-server-url', serverInput.value.trim());
+  });
+
+  function guessDefaultServer() {
+    return location.protocol === 'https:' ? 'wss://' : 'ws://localhost:8080';
+  }
+
+  // ---- URL params (shared link) ----
+  const params = new URLSearchParams(location.search);
+  if (params.get('server')) serverInput.value = params.get('server');
+  if (params.get('room')) {
+    joinCodeInput.value = params.get('room').toUpperCase();
+    switchTab('join');
+  }
+
+  // ---- tabs ----
+  function switchTab(which) {
+    const create = which === 'create';
+    tabCreate.classList.toggle('active', create);
+    tabJoin.classList.toggle('active', !create);
+    paneCreate.classList.toggle('hidden', !create);
+    paneJoin.classList.toggle('hidden', create);
+  }
+  tabCreate.addEventListener('click', () => switchTab('create'));
+  tabJoin.addEventListener('click', () => switchTab('join'));
+
+  // ---- status helper ----
+  function setStatus(text, level) {
+    statusText.textContent = text;
+    statusDot.className = 'dot' + (level ? ' ' + level : '');
+  }
+
+  // ---- websocket signaling ----
+  function connectSignaling() {
+    return new Promise((resolve, reject) => {
+      const url = serverInput.value.trim();
+      if (!url) { reject(new Error('Enter a signaling server address.')); return; }
+      try {
+        ws = new WebSocket(url);
+      } catch (e) {
+        reject(e); return;
+      }
+      ws.addEventListener('open', () => resolve());
+      ws.addEventListener('error', () => reject(new Error('Could not reach the signaling server.')));
+      ws.addEventListener('message', onSignalMessage);
+      ws.addEventListener('close', () => {
+        if (roomPanel.classList.contains('hidden')) return;
+        setStatus('Disconnected from signaling server.', 'error');
+      });
+    });
+  }
+
+  function onSignalMessage(evt) {
+    const msg = JSON.parse(evt.data);
+    switch (msg.type) {
+      case 'created':
+        roomCode = msg.room;
+        showRoom(roomCode);
+        setStatus('Waiting for the other person to join…', 'pending');
+        break;
+      case 'joined':
+        roomCode = msg.room;
+        showRoom(roomCode, false);
+        setStatus('Connected to room. Waiting for the other peer…', 'pending');
+        break;
+      case 'peer-joined':
+        setStatus('Peer joined. Establishing direct connection…', 'pending');
+        isInitiator = true;
+        startPeerConnection(true);
+        break;
+      case 'signal':
+        handleRemoteSignal(msg.data);
+        break;
+      case 'peer-left':
+        setStatus('The other person disconnected.', 'error');
+        teardownPeerConnection();
+        break;
+      case 'error':
+        setStatus(msg.message || 'Signaling error.', 'error');
+        break;
+    }
+  }
+
+  function sendSignal(payload) {
+    ws.send(JSON.stringify({ type: 'signal', data: payload }));
+  }
+
+  function showRoom(code, isCreator = true) {
+    $('setup-panel').classList.add('hidden');
+    roomPanel.classList.remove('hidden');
+    roomCodeDisplay.textContent = code;
+    if (isCreator) {
+      const link = `${location.origin}${location.pathname}?server=${encodeURIComponent(serverInput.value.trim())}&room=${code}`;
+      shareLink.value = link;
+      shareRow.classList.remove('hidden');
+    }
+  }
+
+  btnCopy.addEventListener('click', () => {
+    shareLink.select();
+    navigator.clipboard?.writeText(shareLink.value);
+    btnCopy.textContent = 'Copied';
+    setTimeout(() => (btnCopy.textContent = 'Copy link'), 1400);
+  });
+
+  btnCreate.addEventListener('click', async () => {
+    btnCreate.disabled = true;
+    try {
+      await connectSignaling();
+      ws.send(JSON.stringify({ type: 'create' }));
+    } catch (e) {
+      alert(e.message);
+      btnCreate.disabled = false;
+    }
+  });
+
+  btnJoin.addEventListener('click', async () => {
+    const code = joinCodeInput.value.trim().toUpperCase();
+    if (!code) { alert('Enter a room code.'); return; }
+    btnJoin.disabled = true;
+    try {
+      await connectSignaling();
+      ws.send(JSON.stringify({ type: 'join', room: code }));
+    } catch (e) {
+      alert(e.message);
+      btnJoin.disabled = false;
+    }
+  });
+
+  // auto-join if a room code arrived via link
+  if (params.get('room')) {
+    // give the user a moment to see the field filled, then let them press Join manually
+  }
+
+  // ---- WebRTC ----
+  function startPeerConnection(initiator) {
+    pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) sendSignal({ candidate: e.candidate });
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setStatus('Connected directly to peer.', 'live');
+        transferPanel.classList.remove('hidden');
+      } else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        setStatus('Connection lost.', 'error');
+      }
+    };
+
+    if (initiator) {
+      dataChannel = pc.createDataChannel('files', { ordered: true });
+      setupDataChannel();
+      pc.createOffer()
+        .then((offer) => pc.setLocalDescription(offer))
+        .then(() => sendSignal({ sdp: pc.localDescription }));
+    } else {
+      pc.ondatachannel = (e) => {
+        dataChannel = e.channel;
+        setupDataChannel();
+      };
+    }
+  }
+
+  async function handleRemoteSignal(data) {
+    if (!pc) startPeerConnection(false);
+
+    if (data.sdp) {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      if (data.sdp.type === 'offer') {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        sendSignal({ sdp: pc.localDescription });
+      }
+    } else if (data.candidate) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (err) {
+        console.warn('ICE candidate error', err);
+      }
+    }
+  }
+
+  function teardownPeerConnection() {
+    if (dataChannel) dataChannel.close();
+    if (pc) pc.close();
+    dataChannel = null;
+    pc = null;
+  }
+
+  // ---- data channel: file protocol ----
+  // Control messages are JSON strings: {type:'meta', id, name, size, mime}
+  //                                    {type:'end', id}
+  // Binary messages are raw file chunks (ArrayBuffer) belonging to the
+  // most recently announced (and not yet ended) incoming file.
+
+  let outgoingQueue = [];
+  let sendingNow = false;
+  const incoming = new Map(); // id -> { name, size, mime, received, chunks, rowEl, fillEl, metaEl }
+
+  function setupDataChannel() {
+    dataChannel.binaryType = 'arraybuffer';
+    dataChannel.onopen = () => {
+      transferPanel.classList.remove('hidden');
+    };
+    dataChannel.onmessage = (e) => {
+      if (typeof e.data === 'string') {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'meta') beginIncoming(msg);
+        if (msg.type === 'end') finishIncoming(msg.id);
+      } else {
+        appendIncomingChunk(e.data);
+      }
+    };
+  }
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  // -- sending --
+  dropzone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => queueFiles(fileInput.files));
+  ['dragenter', 'dragover'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('drag'); })
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('drag'); })
+  );
+  dropzone.addEventListener('drop', (e) => queueFiles(e.dataTransfer.files));
+
+  function queueFiles(fileList) {
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+      alert('Not connected to a peer yet.');
+      return;
+    }
+    sendingBlock.classList.remove('hidden');
+    for (const file of fileList) {
+      const id = crypto.randomUUID();
+      const row = buildFileRow(sendingList, id, file.name, file.size);
+      outgoingQueue.push({ id, file, row });
+    }
+    pumpQueue();
+  }
+
+  function buildFileRow(container, id, name, size) {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.dataset.id = id;
+    row.innerHTML = `
+      <div class="top">
+        <span class="name">${escapeHtml(name)}</span>
+        <span class="meta">${fmtBytes(size)}</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill"></div></div>
+    `;
+    container.appendChild(row);
+    return row;
+  }
+
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  async function pumpQueue() {
+    if (sendingNow || outgoingQueue.length === 0) return;
+    sendingNow = true;
+    const job = outgoingQueue.shift();
+    await sendFile(job);
+    sendingNow = false;
+    pumpQueue();
+  }
+
+  function sendFile({ id, file, row }) {
+    return new Promise((resolve) => {
+      const fill = row.querySelector('.bar-fill');
+      dataChannel.send(JSON.stringify({ type: 'meta', id, name: file.name, size: file.size, mime: file.type }));
+
+      let offset = 0;
+      const reader = new FileReader();
+
+      function readSlice() {
+        const slice = file.slice(offset, offset + CHUNK_SIZE);
+        reader.readAsArrayBuffer(slice);
+      }
+
+      reader.onload = () => {
+        const buf = reader.result;
+        waitForBuffer(() => {
+          dataChannel.send(buf);
+          offset += buf.byteLength;
+          fill.style.width = Math.min(100, (offset / file.size) * 100) + '%';
+          if (offset < file.size) {
+            readSlice();
+          } else {
+            dataChannel.send(JSON.stringify({ type: 'end', id }));
+            row.classList.add('done');
+            resolve();
+          }
+        });
+      };
+
+      readSlice();
+    });
+  }
+
+  function waitForBuffer(cb) {
+    if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
+      setTimeout(() => waitForBuffer(cb), 30);
+    } else {
+      cb();
+    }
+  }
+
+  // -- receiving --
+  function beginIncoming(meta) {
+    receivingBlock.classList.remove('hidden');
+    const row = buildFileRow(receivingList, meta.id, meta.name, meta.size);
+    incoming.set(meta.id, {
+      ...meta,
+      received: 0,
+      chunks: [],
+      currentId: meta.id,
+      fillEl: row.querySelector('.bar-fill'),
+      rowEl: row
+    });
+    incoming.lastId = meta.id;
+  }
+
+  function appendIncomingChunk(buf) {
+    const entry = incoming.get(incoming.lastId);
+    if (!entry) return;
+    entry.chunks.push(buf);
+    entry.received += buf.byteLength;
+    entry.fillEl.style.width = Math.min(100, (entry.received / entry.size) * 100) + '%';
+  }
+
+  function finishIncoming(id) {
+    const entry = incoming.get(id);
+    if (!entry) return;
+    const blob = new Blob(entry.chunks, { type: entry.mime || 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    entry.rowEl.classList.add('done');
+    const link = document.createElement('a');
+    link.className = 'dl';
+    link.href = url;
+    link.download = entry.name;
+    link.textContent = 'Download';
+    entry.rowEl.appendChild(link);
+    incoming.delete(id);
+  }
+})();
+</script>
+</body>
+</html>
